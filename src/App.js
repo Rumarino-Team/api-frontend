@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 const RealtimeDetections = () => {
   const [detections, setDetections] = useState([]);
   const canvasRef = useRef(null);
+  const imgRef = useRef(new Image());
 
   useEffect(() => {
     const eventSource = new EventSource("http://localhost:8000/detections/stream");
@@ -30,37 +31,57 @@ const RealtimeDetections = () => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
+    const img = imgRef.current;
+    img.src = "http://localhost:8000/video_feed";
 
-    // Clear previous drawings
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    detections.forEach((detector) => {
-      detector.detections.forEach((detection) => {
-        const { x_offset, y_offset, width, height } = detection.bounding_box;
-
-        ctx.strokeStyle = "red";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x_offset, y_offset, width, height);
-
-        // Draw label
-        ctx.fillStyle = "red";
-        ctx.font = "14px Arial";
-        ctx.fillText(
-          `${detection.cls} (${(detection.confidence * 100).toFixed(1)}%)`,
-          x_offset,
-          y_offset - 5
-        );
+    const drawFrame = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    
+      const imgWidth = img.naturalWidth;
+      const imgHeight = img.naturalHeight;
+      const scaleX = canvas.width / imgWidth;
+      const scaleY = canvas.height / imgHeight;
+    
+      detections.forEach((detector) => {
+        detector.detections.forEach((detection) => {
+          const { x_offset, y_offset, width, height } = detection.bounding_box;
+    
+          const x = x_offset * scaleX;
+          const y = y_offset * scaleY;
+          const w = width * scaleX;
+          const h = height * scaleY;
+    
+          ctx.strokeStyle = "red";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, y, w, h);
+    
+          ctx.fillStyle = "red";
+          ctx.font = "14px Arial";
+          ctx.fillText(
+            `${detection.cls} (${(detection.confidence * 100).toFixed(1)}%)`,
+            x,
+            y - 5
+          );
+        });
       });
-    });
+    
+      requestAnimationFrame(drawFrame);
+    };
+    
+
+    img.onload = () => {
+      drawFrame();
+    };
   }, [detections]);
 
   return (
     <div className="container">
       <h1 className="title">Real-Time Detections</h1>
       <div className="canvas-container">
-        <canvas ref={canvasRef} width={640} height={480} className="detection-canvas"></canvas>
+        <canvas ref={canvasRef} width={720} height={480} className="detection-canvas"></canvas>
       </div>
-      {detections.length === 0 ? (
+      {/* {detections.length === 0 ? (
         <p className="no-detections">No detections yet...</p>
       ) : (
         <div className="grid">
@@ -84,14 +105,13 @@ const RealtimeDetections = () => {
             </div>
           ))}
         </div>
-      )}
+      )} */}
     </div>
   );
 };
 
 export default RealtimeDetections;
 
-// Styles
 const styles = `
   .container {
     padding: 1rem;
@@ -103,10 +123,6 @@ const styles = `
     font-weight: bold;
     margin-bottom: 1rem;
     text-align: center;
-  }
-  .no-detections {
-    text-align: center;
-    color: #4b5563;
   }
   .canvas-container {
     display: flex;
